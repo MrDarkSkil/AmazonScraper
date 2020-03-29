@@ -1,0 +1,30 @@
+{
+  "name": "mrdarkskil/amazon-service",
+  "description": "Amazon service, find product' data and more...",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Leo Hubert",
+      "email": "leo.hubert@epitech.eu"
+    }
+  ],
+  "minimum-stability": "stable",
+  "require": {
+    "paquettg/php-html-parser": "^2.2",
+    "guzzlehttp/guzzle": "^6.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "AmazonService\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "AmazonService\\Tests\\": "tests/"
+    }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.0"
+  }
+}
