@@ -1,6 +1,5 @@
 <?php
 
-
 namespace AmazonService\Tests;
 
 use AmazonService\Enums\AmazonDomains;

@@ -1,7 +1,7 @@
 <?php
 
 
-namespace AmazonService\utils;
+namespace AmazonService\Utils;
 
 use Exception;
 use PHPHtmlParser\Dom;

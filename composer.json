@@ -9,6 +9,9 @@
       "email": "leo.hubert@epitech.eu"
     }
   ],
+  "scripts": {
+    "test": "./vendor/bin/phpunit tests"
+  },
   "minimum-stability": "stable",
   "require": {
     "paquettg/php-html-parser": "^2.2",
@@ -16,7 +19,12 @@
   },
   "autoload": {
     "psr-4": {
-      "AmazonService\\": "src/"
+      "AmazonService\\": "src/",
+      "AmazonService\\Enums\\": "src/enums/",
+      "AmazonService\\Exceptions\\": "src/exceptions/",
+      "AmazonService\\Models\\": "src/models/",
+      "AmazonService\\Services\\": "src/services/",
+      "AmazonService\\Utils\\": "src/utils/"
     }
   },
   "autoload-dev": {

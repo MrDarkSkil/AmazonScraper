@@ -1,0 +1,3 @@
+# AmazonService
+![Tests](https://github.com/MrDarkSkil/AmazonService/workflows/Tests/badge.svg)
+Amazon Service, find product data and more...

@@ -7,7 +7,7 @@ use AmazonService\Exceptions\ProductNotFound;
 use AmazonService\Models\Product\Category;
 use AmazonService\Models\Product\Merchant;
 use AmazonService\Models\Product\Product;
-use AmazonService\utils\DomParserUtils;
+use AmazonService\Utils\DomParserUtils;
 use Exception;
 use GuzzleHttp\Client;
 use PHPHtmlParser\Dom;
