@@ -8,6 +8,7 @@ use AmazonService\Models\Product\Category;
 use AmazonService\Models\Product\Merchant;
 use AmazonService\Models\Product\Product;
 use AmazonService\Utils\DomParserUtils;
+use AmazonService\Utils\UserAgentUtils;
 use Exception;
 use GuzzleHttp\Client;
 use PHPHtmlParser\Dom;
@@ -27,7 +28,7 @@ class ProductService
     {
         $this->httpClient = new Client([
             'headers' => [
-                'User-Agent' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36'
+                'User-Agent' => UserAgentUtils::getRandomUserAgent()
             ]
         ]);
     }
