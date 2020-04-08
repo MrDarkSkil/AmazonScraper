@@ -18,6 +18,10 @@ use PHPHtmlParser\Exceptions\StrictException;
 
 class ProductService
 {
+    /**
+     * @var string
+     */
+    private $userAgent;
 
     /**
      * @var Client
@@ -26,11 +30,29 @@ class ProductService
 
     public function __construct()
     {
+        $this->userAgent = $this->getUserAgent();
         $this->httpClient = new Client([
             'headers' => [
-                'User-Agent' => UserAgentUtils::getRandomUserAgent()
+                'User-Agent' => $this->userAgent
             ]
         ]);
+    }
+
+    /**
+     * This will generate random userAgent
+     * every 60 seconds.
+     *
+     * @return false|mixed|string
+     */
+    private function getUserAgent()
+    {
+        $cacheFilePath = '/tmp/userAgent';
+        if (file_exists($cacheFilePath) && ((time() - 60) < filemtime($cacheFilePath))) {
+            return file_get_contents($cacheFilePath);
+        }
+        $userAgent = UserAgentUtils::getRandomUserAgent();
+        file_put_contents($cacheFilePath, $userAgent);
+        return $userAgent;
     }
 
     /**
@@ -48,7 +70,7 @@ class ProductService
         try {
             $dom = $this->initDom($productUrl);
         } catch (Exception $exception) {
-            throw new ProductNotFound("Product for asin '$asin' was not found on '$domain'.", $exception->getCode(), $exception);
+            throw new ProductNotFound("Product for asin '$asin' was not found on '$domain'.", $this->userAgent, $exception->getCode(), $exception);
         }
         return $this->constructProduct($asin, $domain, $dom);
     }
@@ -104,10 +126,10 @@ class ProductService
             "#title"
         ];
         if (($nameDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
-            throw CouldNotProcessProduct::parentDivNotFound("name", $selectors);
+            throw CouldNotProcessProduct::parentDivNotFound("name", $selectors, $this->userAgent);
         }
         if ($nameDiv->offsetGet(0)->find('span')->count() === 0) {
-            throw CouldNotProcessProduct::childDivNotFound("name", $selectors, 'span');
+            throw CouldNotProcessProduct::childDivNotFound("name", $selectors, 'span', $this->userAgent);
         }
         return trim($nameDiv->offsetGet(0)->find('span')->firstChild()->text());
     }
@@ -134,7 +156,7 @@ class ProductService
             "#imageBlock"
         ];
         if (($imagesDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
-            throw CouldNotProcessProduct::parentDivNotFound("images", $selectors);
+            throw CouldNotProcessProduct::parentDivNotFound("images", $selectors, $this->userAgent);
         }
         $imagesDiv = $imagesDiv->find('img');
         foreach ($imagesDiv as $key => $div) {
@@ -168,7 +190,7 @@ class ProductService
             "#bylineInfo"
         ];
         if (($merchantDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
-            throw CouldNotProcessProduct::parentDivNotFound("merchant", $selectors);
+            throw CouldNotProcessProduct::parentDivNotFound("merchant", $selectors, $this->userAgent);
         }
         if ($merchantDiv->getAttribute('href')) {
             return new Merchant(
@@ -178,7 +200,7 @@ class ProductService
         }
         $merchantDiv = $merchantDiv->find('a');
         if (!$merchantDiv || $merchantDiv->count() == 0) {
-            throw CouldNotProcessProduct::childDivNotFound("merchant", $selectors, 'a');
+            throw CouldNotProcessProduct::childDivNotFound("merchant", $selectors, 'a', $this->userAgent);
         }
         return new Merchant(
             $merchantDiv->firstChild()->text() ?? '',
@@ -200,7 +222,7 @@ class ProductService
             '#SalesRank'
         ];
         if (($rankDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
-            throw CouldNotProcessProduct::noCategoriesFound();
+            throw CouldNotProcessProduct::noCategoriesFound($this->userAgent);
         }
         $categories = [];
         /**
@@ -244,11 +266,11 @@ class ProductService
         try {
             $dom = $this->initDom($url);
         } catch (Exception $exception) {
-            throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url);
+            throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url, $this->userAgent);
         }
 
         if (($categoryDiv = DomParserUtils::findParentDiv($dom, ['.category'])) === null) {
-            throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url);
+            throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url, $this->userAgent);
         }
 
         return trim($categoryDiv->firstChild()->text() ?? '');

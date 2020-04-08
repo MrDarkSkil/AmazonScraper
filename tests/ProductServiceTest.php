@@ -3,6 +3,7 @@
 namespace AmazonService\Tests;
 
 use AmazonService\Enums\AmazonDomains;
+use AmazonService\Exceptions\AmazonServiceException;
 use AmazonService\Exceptions\CouldNotProcessProduct;
 use AmazonService\Exceptions\ProductNotFound;
 use AmazonService\Services\ProductService;
@@ -94,6 +95,18 @@ class ProductServiceTest extends TestCase
 
     /**
      * @test
+     */
+    public function when_exception_handled_user_agent_must_be_not_null()
+    {
+        try {
+            $this->productService->getByAsin($this::WRONG_ASIN, $this::AMAZON_DOMAIN);
+        } catch (AmazonServiceException $exception) {
+            $this->assertNotNull($exception->getUserAgent());
+        }
+    }
+
+    /**
+     * @test
      *
      * @throws ProductNotFound
      * @throws CouldNotProcessProduct
@@ -108,7 +121,7 @@ class ProductServiceTest extends TestCase
     /**
      * @test
      */
-    public function product_exist_must_return_false()
+    public function product_exist_must_return_false_with_wrong_asin()
     {
         $this->assertNotTrue($this->productService->existByAsin($this::WRONG_ASIN, $this::AMAZON_DOMAIN));
     }
@@ -116,7 +129,7 @@ class ProductServiceTest extends TestCase
     /**
      * @test
      */
-    public function product_exist_must_return_true()
+    public function product_exist_must_return_true_with_good_asin()
     {
         $this->assertTrue($this->productService->existByAsin($this::BOOK_ASIN, $this::AMAZON_DOMAIN));
     }
