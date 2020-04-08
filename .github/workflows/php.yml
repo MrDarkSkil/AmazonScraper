@@ -22,3 +22,9 @@ jobs:
 
     - name: Run test suite
       run: composer run-script test
+
+    - uses: actions/upload-artifact@v1
+      if: failure()
+      with:
+        name: userAgent
+        path: /tmp/userAgent
