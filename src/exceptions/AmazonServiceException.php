@@ -3,7 +3,7 @@
 
 namespace AmazonService\Exceptions;
 
-use stringEncode\Exception;
+use Exception;
 use Throwable;
 
 class AmazonServiceException extends Exception

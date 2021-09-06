@@ -9,12 +9,12 @@ use AmazonService\Models\Product\Merchant;
 use AmazonService\Models\Product\Product;
 use AmazonService\Utils\DomParserUtils;
 use AmazonService\Utils\UserAgentUtils;
+use DOMDocument;
+use DOMElement;
+use DOMNodeList;
+use DOMXPath;
 use Exception;
 use GuzzleHttp\Client;
-use PHPHtmlParser\Dom;
-use PHPHtmlParser\Exceptions\ChildNotFoundException;
-use PHPHtmlParser\Exceptions\CircularException;
-use PHPHtmlParser\Exceptions\StrictException;
 
 class ProductService
 {
@@ -23,19 +23,9 @@ class ProductService
      */
     private $userAgent;
 
-    /**
-     * @var Client
-     */
-    private $httpClient;
-
     public function __construct()
     {
         $this->userAgent = $this->getUserAgent();
-        $this->httpClient = new Client([
-            'headers' => [
-                'User-Agent' => $this->userAgent
-            ]
-        ]);
     }
 
     /**
@@ -64,74 +54,98 @@ class ProductService
      * @throws ProductNotFound
      * @throws CouldNotProcessProduct
      */
-    public function getByAsin(string $asin, string $domain)
+    public function getByAsin(string $asin, string $domain): Product
     {
         $productUrl = "https://www.$domain/dp/$asin";
         try {
-            $dom = $this->initDom($productUrl);
+            [$dom, $xPath] = $this->initDom($productUrl);
         } catch (Exception $exception) {
             throw new ProductNotFound("Product for asin '$asin' was not found on '$domain'.", $this->userAgent, $exception->getCode(), $exception);
         }
-        return $this->constructProduct($asin, $domain, $dom);
+        return $this->constructProduct($asin, $domain, $dom, $xPath);
     }
 
     /**
      * Initialize a virtual dom of given url
      *
      * @param $url
-     * @return Dom
-     * @throws ChildNotFoundException
-     * @throws CircularException
-     * @throws StrictException
+     * @return array
+     * @throws ProductNotFound
      */
-    private function initDom($url): Dom
+    private function initDom($url): array
     {
-        $dom = new Dom;
-        $response = $this->httpClient->get($url);
-        $dom->loadStr(html_entity_decode($response->getBody()->getContents()), [
-            'enforceEncoding' => 'UTF-8'
-        ]);
-        return $dom;
+        $dom = new DOMDocument();
+        $html = $this->getHtml($url);
+        libxml_use_internal_errors(true);
+
+        if (!$html) {
+            throw new ProductNotFound();
+        }
+
+        $dom->loadHTML($html);
+        libxml_clear_errors();
+        $xPath = new DomXpath($dom);
+
+        return [$dom, $xPath];
+    }
+
+    /**
+     * Get HTML from Url by initiating Curl
+     * @param  string $url
+     * @return String
+     */
+    public function getHtml(string $url): string
+    {
+        $curl = curl_init($url);
+        curl_setopt($curl, CURLOPT_USERAGENT, $this->userAgent);
+        curl_setopt($curl, CURLOPT_FAILONERROR, true);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        $html = curl_exec($curl);
+        curl_close($curl);
+
+        return $html;
     }
 
     /**
      * @param string $asin
      * @param string $domain
-     * @param Dom $dom
      * @return Product
      * @throws CouldNotProcessProduct
      */
-    private function constructProduct(string $asin, string $domain, Dom $dom): Product
+    private function constructProduct(string $asin, string $domain, DOMDocument $dom, DOMXPath $xPath): Product
     {
         return new Product(
             $asin,
             $domain,
-            $this->getName($dom),
-            $this->getImages($dom),
-            $this->getMerchant($dom),
-            $this->getCategories($dom, $domain)
+            $this->getName($dom, $xPath),
+            $this->getImages($dom, $xPath),
+            $this->getMerchant($dom, $xPath),
+            $this->getCategories($dom, $xPath, $domain)
         );
     }
 
     /**
      * Parse virtual dom to find product name
      *
-     * @param Dom $dom
      * @return mixed
      * @throws CouldNotProcessProduct
      */
-    private function getName(Dom $dom): string
+    private function getName(DOMDocument $dom, DOMXPath $xPath): string
     {
         $selectors = [
-            "#title"
+            "#title",
+            '#productTitle'
         ];
-        if (($nameDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
+
+        if (($nameDiv = DomParserUtils::findParentDiv($dom, $xPath, $selectors)) === null) {
             throw CouldNotProcessProduct::parentDivNotFound("name", $selectors, $this->userAgent);
         }
-        if ($nameDiv->offsetGet(0)->find('span')->count() === 0) {
+        if ($nameDiv->getElementsByTagName('span')->count() === 0) {
             throw CouldNotProcessProduct::childDivNotFound("name", $selectors, 'span', $this->userAgent);
         }
-        return trim($nameDiv->offsetGet(0)->find('span')->firstChild()->text());
+
+        return explode("\n", trim($nameDiv->textContent))[0];
     }
 
 
@@ -142,33 +156,36 @@ class ProductService
     /**
      * Parse virtual dom to find product images
      *
-     * @param Dom $dom
+     * @param  DOMDocument  $dom
+     * @param  DOMXPath  $xPath
      * @return array
      * @throws CouldNotProcessProduct
      */
-    private function getImages(Dom $dom): array
+    private function getImages(DOMDocument $dom, DOMXPath $xPath): array
     {
         $images = [];
         $selectors = [
             "#altImages",
             "#imageBlock_feature_div",
             "#imageBlockNew_feature_div",
-            "#imageBlock"
+            "#imageBlock",
+            '#ebooksImageBlock'
         ];
-        if (($imagesDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
+        if (($imagesDiv = DomParserUtils::findParentDiv($dom, $xPath, $selectors)) === null) {
             throw CouldNotProcessProduct::parentDivNotFound("images", $selectors, $this->userAgent);
         }
-        $imagesDiv = $imagesDiv->find('img');
+        $imagesDiv = $imagesDiv->getElementsByTagName('img');
+
         foreach ($imagesDiv as $key => $div) {
-            $image = null;
-            if ($div->getAttribute('src')) {
-                $image = $div->getAttribute('src');
-            } else if ($div->getAttribute('data-old-hires')) {
-                $image = $div->getAttribute('data-old-hires');
+            $image = $div->attributes->getNamedItem('src');
+            if (!$image) {
+                $image = $div->attributes->getNamedItem('data-old-hires');
             }
+            $image = $image->textContent;
+
             if ($image &&
-                (strstr($image, "/images/I/") ||
-                    strstr($image, "base64"))) {
+              (strstr($image, "/images/I/") ||
+                strstr($image, "base64"))) {
                 $image = str_replace("S40_", "S300_", $image);
                 $images[] = $image;
             }
@@ -180,75 +197,102 @@ class ProductService
     /**
      * Parse virtual dom to retrieve merchant information
      *
-     * @param Dom $dom
+     * @param  DOMDocument  $dom
+     * @param  DOMXPath  $xPath
      * @return Merchant
      * @throws CouldNotProcessProduct
      */
-    private function getMerchant(Dom $dom): Merchant
+    private function getMerchant(DOMDocument $dom, DOMXPath$xPath): Merchant
     {
         $selectors = [
-            "#bylineInfo"
+            '.contributorNameID',
+            '.prodDetAttrValue',
+            "#bylineInfo",
         ];
-        if (($merchantDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
+        if (($merchantDiv = DomParserUtils::findParentDiv($dom, $xPath, $selectors)) === null) {
             throw CouldNotProcessProduct::parentDivNotFound("merchant", $selectors, $this->userAgent);
         }
-        if ($merchantDiv->getAttribute('href')) {
-            return new Merchant(
-                $merchantDiv->firstChild()->text() ?? '',
-                $merchantDiv->getAttribute('href') ?? ''
-            );
+
+        if ($merchantDiv instanceof DOMNodeList && $merchantDiv->count() > 0) {
+
+            $merchantDiv = $merchantDiv->item(0);
+
+            if ($merchantDiv) {
+                return new Merchant(
+                  $merchantDiv->firstChild->textContent ?? '',
+                  $merchantDiv->getAttribute('href') ?? ''
+                );
+            }
+
+        } else if ($merchantDiv instanceof DOMElement) {
+            if ($merchantDiv->getAttribute('href')) {
+                return new Merchant(
+                  $merchantDiv->firstChild->textContent ?? '',
+                  $merchantDiv->getAttribute('href') ?? ''
+                );
+            }
+
+            $merchantDiv = $merchantDiv->getElementsByTagName('a');
+            if (!$merchantDiv || $merchantDiv->count() == 0) {
+                throw CouldNotProcessProduct::childDivNotFound("merchant", $selectors, 'a', $this->userAgent);
+            }
         }
-        $merchantDiv = $merchantDiv->find('a');
-        if (!$merchantDiv || $merchantDiv->count() == 0) {
-            throw CouldNotProcessProduct::childDivNotFound("merchant", $selectors, 'a', $this->userAgent);
-        }
+
         return new Merchant(
-            $merchantDiv->firstChild()->text() ?? '',
-            $merchantDiv->getAttribute('href') ?? ''
+          $merchantDiv->item(0)->textContent ?? '',
+          $merchantDiv->item(0)->getAttribute('href') ?? ''
         );
     }
 
     /**
      * Retrieve product categories from virtual dom.
      *
-     * @param Dom $dom
-     * @param string $domain
+     * @param  string  $domain
      * @return array
      * @throws CouldNotProcessProduct
      */
-    private function getCategories(Dom $dom, string $domain): array
+    private function getCategories(DOMDocument $dom, DOMXPath $xPath, string $domain): array
     {
         $selectors = [
-            '#SalesRank'
+            '#SalesRank',
+            '#detailBullets_feature_div',
+            '#productDetails_detailBullets_sections1'
         ];
-        if (($rankDiv = DomParserUtils::findParentDiv($dom, $selectors)) === null) {
+
+        if (($rankDiv = DomParserUtils::findParentDiv($dom, $xPath, $selectors)) === null) {
             throw CouldNotProcessProduct::noCategoriesFound($this->userAgent);
         }
+
         $categories = [];
-        /**
-         * @var $randDiv Dom\Collection
-         */
-        $ranksDiv = $rankDiv->find('a');
+
+        if ($rankDiv instanceof DOMNodeList) {
+            $rankDiv = $rankDiv->item(0);
+        }
+
+        $ranksDiv = $rankDiv->getElementsByTagName('a');
 
         foreach ($ranksDiv as $div) {
-            $isTop = (strstr($div->text(), '100') ? true : false);
+            $isTop = (bool) strstr($div->textContent, '100');
             $url = $div->getAttribute('href');
             if ($isTop) {
                 $name = self::getCategoryNameWithUrl("https://www.$domain/" . $url);
-                $position = $div->getParent()->text();
+                $position = $div->parentNode->textContent;
             } else {
-                $name = $div->text();
-                $position = $div->getParent()->getParent()->find('.zg_hrsr_rank')->text();
+                $name = $div->textContent;
+                $position = $div->parentNode->parentNode->textContent;
             }
             $name = trim($name);
             $position = str_replace('-', '', $position);
             $position = filter_var($position, FILTER_SANITIZE_NUMBER_INT);
-            $categories[] = new Category(
-                $isTop,
-                $position,
-                $name,
-                $url
-            );
+
+            if (str_contains($url,'/gp/')) {
+                $categories[] = new Category(
+                  $isTop,
+                  (int)$position,
+                  $name,
+                  $url
+                );
+            }
         }
 
         return $categories;
@@ -261,19 +305,23 @@ class ProductService
      * @return string
      * @throws CouldNotProcessProduct
      */
-    public function getCategoryNameWithUrl($url)
+    public function getCategoryNameWithUrl($url): string
     {
         try {
-            $dom = $this->initDom($url);
+            [$dom, $xPath] = $this->initDom($url);
         } catch (Exception $exception) {
             throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url, $this->userAgent);
         }
 
-        if (($categoryDiv = DomParserUtils::findParentDiv($dom, ['.category'])) === null) {
+        if (($categoryDiv = DomParserUtils::findParentDiv($dom, $xPath, ['.category'])) === null) {
             throw CouldNotProcessProduct::cannotRetrieveCategoryNameWithUrl($url, $this->userAgent);
         }
 
-        return trim($categoryDiv->firstChild()->text() ?? '');
+        if ($categoryDiv instanceof DOMNodeList) {
+            $categoryDiv = $categoryDiv->item(0);
+        }
+
+        return trim($categoryDiv->textContent ?? '');
 
     }
 
@@ -286,11 +334,18 @@ class ProductService
      */
     public function existByAsin(string $asin, string $domain): bool
     {
-        try {
-            $this->httpClient->get("https://www.$domain/dp/$asin");
-        } catch (Exception $exception) {
+        $curl = curl_init("https://www.$domain/dp/$asin");
+        curl_setopt($curl, CURLOPT_USERAGENT, $this->userAgent);
+        curl_setopt($curl, CURLOPT_FAILONERROR, true);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        $html = curl_exec($curl);
+        curl_close($curl);
+
+        if (!$html) {
             return false;
         }
+
         return true;
     }
 }

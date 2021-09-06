@@ -14,8 +14,9 @@
   },
   "minimum-stability": "stable",
   "require": {
-    "paquettg/php-html-parser": "^2.2",
-    "guzzlehttp/guzzle": "^6.5"
+    "ext-dom": "*",
+    "ext-libxml": "*",
+    "ext-curl": "*"
   },
   "autoload": {
     "psr-4": {

@@ -3,32 +3,40 @@
 
 namespace AmazonService\Utils;
 
+use DOMElement;
+use DOMNodeList;
 use Exception;
-use PHPHtmlParser\Dom;
+use DOMDocument;
+use DOMXPath;
 
 class DomParserUtils
 {
     /**
-     * @param Dom $dom
-     * @param array $selectors
-     * @return Dom\Collection|null
+     * @param  DOMDocument  $dom
+     * @param  DOMXPath  $xPath
+     * @param  array  $selectors
+     * @return DOMElement|DOMNodeList|null
      */
-    public static function findParentDiv(Dom $dom, array $selectors)
+    public static function findParentDiv(DOMDocument $dom, DOMXPath $xPath, array $selectors)
     {
-        try {
-            $parentDiv = null;
-            foreach ($selectors as $selector) {
-                $parentDiv = $dom->find($selector);
-                if ($parentDiv && $parentDiv->count() !== 0) {
+        foreach ($selectors as $selector) {
+            switch ($selector[0]) {
+                case '#':
+                    $selector = str_replace('#', '', $selector);
+                    $found = $dom->getElementById($selector);
                     break;
-                }
+                case '.':
+                    $selector = str_replace('.', '', $selector);
+                    $found = $xPath->query("//*[contains(@class, '$selector')]");
+                    break;
+                default:
+                    throw new \Error('Filter was not found.');
             }
-        } catch (Exception $exception) {
-            return null;
+
+            if ($found instanceof DOMNodeList && $found->count() > 0 || $found instanceof DOMElement && $found->textContent !== '') {
+                return $found;
+            }
         }
-        if (!$parentDiv || $parentDiv->count() === 0) {
-            return null;
-        }
-        return $parentDiv;
+        return null;
     }
 }

@@ -22,7 +22,7 @@ class Merchant
      */
     public function __construct(string $name, string $url)
     {
-        $this->name = $name;
+        $this->name = str_replace('‎', '', trim($name));
         $this->url = $url;
     }
 }

@@ -15,10 +15,10 @@ class ProductServiceTest extends TestCase
 
     const BOOK_ASIN = "B07KPJP3XP";
     const BOOK_NAME = "BRILLE, tant que tu vis!: Un roman qui donne envie d'aimer";
-    const BOOK_MERCHANT_NAME = "Alice QUINN";
+    const BOOK_MERCHANT_NAME = "Alice Quinn";
 
     const PRODUCT_ASIN = "B0756F2SV2";
-    const PRODUCT_NAME = "Calendrier 2020 - format A4 - Papier épais - prévu pour l'écriture.";
+    const PRODUCT_NAME = "Calendrier 2022 - format A4 - Papier épais - prévu pour l'écriture.";
     const PRODUCT_MERCHANT_NAME = "La petite fabrique";
 
     const WRONG_ASIN = "FooBar";
@@ -83,6 +83,7 @@ class ProductServiceTest extends TestCase
 
     /**
      * @test
+     * @covers
      *
      * @throws ProductNotFound
      * @throws CouldNotProcessProduct
